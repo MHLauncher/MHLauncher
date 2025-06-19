@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MHLauncher</title>
+<style>
+    /* Общие стили и цвета */
+    html, body {
+        margin: 0; padding: 0; height: 100%;
+        font-family: Arial, sans-serif;
+        background-color: rgb(30,30,30);
+        color: #fff;
+        overflow: hidden;
+    }
+    body {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        padding: 20px;
+        box-sizing: border-box;
+    }
+
+    /* Фоновые элементы */
+    #background-container {
+        position: fixed;
+        top: 0; left: 0; width: 100%; height: 100%;
+        z-index: 0;
+        overflow: hidden;
+    }
+    #bg_static, #bg_animate {
+        position: absolute;
+        top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        user-select: none;
+        pointer-events: none;
+        filter: brightness(0.5);
+    }
+    #bg_animate {
+        display: none;
+    }
+
+    /* Контейнер для всего интерфейса */
+    #app-container {
+        background: rgba(42, 42, 42, 0.85);
+        border-radius: 20px;
+        max-width: 720px;
+        width: 100%;
+        padding: 30px 40px;
+        box-sizing: border-box;
+        box-shadow: 0 0 20px rgba(255,127,39,0.7);
+        display: flex;
+        flex-direction: column;
+        gap: 25px;
+        min-height: 600px;
+        z-index: 10;
+    }
+
+    /* Верхний левый логотип */
+    #logo {
+        position: fixed;
+        top: 20px;
+        left: 20px;
+        width: 60px;
+        height: 60px;
+        border-radius: 12px;
+        box-shadow: 0 0 15px #FF7F27;
+        z-index: 20;
+        user-select: none;
+    }
+
+    /* Заголовок */
+    h1 {
+        margin: 0;
+        font-weight: 900;
+        font-size: 2.8rem;
+        letter-spacing: 2px;
+        text-align: center;
+        color: #FF7F27;
+        text-shadow: 0 0 8px #FF7F27;
+        user-select: none;
+    }
+
+    /* Переключатель фонового режима */
+    #background-switcher {
+        display: flex;
+        justify-content: center;
+        gap: 15px;
+        z-index: 10;
+    }
+    #background-switcher button {
+        background: #3a3a3a;
+        border: none;
+        border-radius: 12px;
+        color: #fff;
+        padding: 10px 18px;
+        font-weight: 600;
+        cursor: pointer;
+        box-shadow: 0 0 6px rgba(255,127,39,0.5);
+        transition: background-color 0.3s ease;
+        user-select: none;
+        z-index: 10;
+    }
+    #background-switcher button.active,
+    #background-switcher button:hover {
+        background-color: #FF7F27;
+        box-shadow: 0 0 12px #FF7F27;
+        color: #1e1e1e;
+    }
+
+    /* Форма */
+    form {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        flex-grow: 1;
+        z-index: 10;
+    }
+
+    label {
+        font-weight: 700;
+        font-size: 1.1rem;
+        user-select: none;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    /* Поля ввода и селекты без иконок */
+    input[type="text"],
+    select {
+        width: 100%;
+        padding: 12px 14px;
+        border-radius: 12px;
+        border: none;
+        background-color: #3a3a3a;
+        color: #fff;
+        font-size: 16px;
+        box-sizing: border-box;
+        outline-offset: 2px;
+        transition: outline 0.3s ease;
+    }
+    input[type="text"]:focus,
+    select:focus {
+        outline: 2px solid #FF7F27;
+        background-color: #4a4a4a;
+    }
+
+    /* Память - раскрывающийся список */
+    #memory {
+        padding-left: 14px !important;
+    }
+
+    /* Версии с иконками в кастомном списке */
+    #version-list {
+        flex-grow: 1;
+        overflow-y: auto;
+        max-height: 260px; /* ограничиваем высоту для прокрутки */
+        background-color: #3a3a3a;
+        border-radius: 12px;
+        padding: 8px 0;
+        box-sizing: border-box;
+        user-select: none;
+        outline: none;
+        cursor: pointer;
+        transition: max-height 0.3s ease, opacity 0.3s ease;
+        opacity: 1;
+    }
+    #version-list.collapsed {
+        max-height: 0;
+        opacity: 0;
+        padding: 0 0;
+        pointer-events: none;
+    }
+    #version-list .version-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 20px;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 1rem;
+        color: #fff;
+        transition: background-color 0.2s ease;
+        border-left: 4px solid transparent;
+        user-select: none;
+    }
+    #version-list .version-item:hover {
+        background-color: #4a4a4a;
+    }
+    #version-list .version-item.selected {
+        background-color: #FF7F27;
+        color: #1e1e1e;
+        border-left-color: #fff;
+        font-weight: 700;
+    }
+    #version-list .version-item img.icon-img {
+        width: 26px;
+        height: 26px;
+        border-radius: 6px;
+        user-select: none;
+    }
+
+    /* Иконка стрелки раскрытия */
+    #version-toggle-icon {
+        font-size: 1.4rem;
+        user-select: none;
+        transition: transform 0.3s ease;
+    }
+    #version-toggle-icon.expanded {
+        transform: rotate(180deg);
+    }
+
+    /* Кнопки управления */
+    #actions {
+        display: flex;
+        justify-content: center;
+        gap: 20px;
+        margin-top: 10px;
+        z-index: 10;
+    }
+    #actions button {
+        background-color: #FF7F27;
+        border: none;
+        border-radius: 20px;
+        padding: 14px 32px;
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #1e1e1e;
+        cursor: pointer;
+        box-shadow: 0 0 15px #FF7F27;
+        transition: background-color 0.3s ease;
+        user-select: none;
+    }
+    #actions button:hover {
+        background-color: #e67322;
+    }
+
+    /* Тост уведомления */
+    #toast {
+        position: fixed;
+        top: 30px;
+        right: 30px;
+        min-width: 280px;
+        max-width: 320px;
+        padding: 16px 20px;
+        border-radius: 14px;
+        font-size: 16px;
+        font-weight: 600;
+        z-index: 9999;
+        color: #fff;
+        opacity: 0;
+        pointer-events: none;
+        user-select: none;
+        transition: opacity 0.4s ease;
+    }
+    #toast.show {
+        opacity: 0.97;
+        pointer-events: auto;
+    }
+    #toast.success {
+        background-color: #5cb85c;
+        box-shadow: 0 0 15px #5cb85c;
+    }
+    #toast.error {
+        background-color: #d9534f;
+        box-shadow: 0 0 15px #d9534f;
+    }
+
+    /* Scrollbar для версии */
+    #version-list::-webkit-scrollbar {
+        width: 8px;
+    }
+    #version-list::-webkit-scrollbar-thumb {
+        background-color: #FF7F27;
+        border-radius: 6px;
+    }
+    #version-list::-webkit-scrollbar-track {
+        background-color: #2a2a2a;
+    }
+
+    /* Мобильная адаптация */
+    @media (max-width: 480px) {
+        #app-container {
+            padding: 20px 25px;
+        }
+        #actions button {
+            padding: 12px 24px;
+            font-size: 1rem;
+        }
+        h1 {
+            font-size: 2rem;
+        }
+    }
+</style>
+</head>
+<body>
+
+<!-- Фоновые элементы -->
+<div id="background-container">
+    <img id="bg_static" src="{{ url_for('static', filename='bg_static.png') }}" alt="Static Background" draggable="false" />
+    <video id="bg_animate" autoplay loop muted playsinline>
+        <source src="{{ url_for('static', filename='bg_animate.mp4') }}" type="video/mp4" />
+    </video>
+</div>
+
+<!-- Логотип в верхнем левом углу -->
+<img src="{{ url_for('static', filename='icon.png') }}" alt="Icon" id="logo" draggable="false" />
+
+<div id="app-container" role="main" aria-label="MHLauncher">
+
+    <h1>MHLauncher</h1>
+
+    <!-- Переключатель фона -->
+    <div id="background-switcher" role="group" aria-label="Выбор фонового режима">
+        <button type="button" class="active" data-bg="static" aria-pressed="true">Статичное изображение</button>
+        <button type="button" data-bg="animate" aria-pressed="false">Анимированное видео</button>
+        <button type="button" data-bg="gray" aria-pressed="false">Серый фон</button>
+    </div>
+
+    <form id="launcher-form" onsubmit="return false;" aria-label="Форма запуска Minecraft">
+
+        <label for="username">Никнейм:</label>
+        <input type="text" id="username" name="username" required autocomplete="off" aria-required="true" value="{{ user_settings.get('username', '') }}" />
+
+        <label for="memory">Память (МБ):</label>
+        <select id="memory" name="memory" aria-describedby="memoryHelp">
+            <option value="" {% if not user_settings.get('memory') %}selected{% endif %}>Авто</option>
+            <option value="512" {% if user_settings.get('memory') == '512' %}selected{% endif %}>512</option>
+            <option value="1024" {% if user_settings.get('memory') == '1024' %}selected{% endif %}>1024</option>
+            <option value="2048" {% if user_settings.get('memory') == '2048' %}selected{% endif %}>2048</option>
+            <option value="4096" {% if user_settings.get('memory') == '4096' %}selected{% endif %}>4096</option>
+            <option value="8192" {% if user_settings.get('memory') == '8192' %}selected{% endif %}>8192</option>
+            <option value="16384" {% if user_settings.get('memory') == '16384' %}selected{% endif %}>16384</option>
+        </select>
+
+        <label for="version_type">Тип версии:</label>
+        <div class="input-with-icon">
+            <img src="{{ url_for('static', filename='vanilla_icon.png') }}" alt="Тип версии иконка" class="icon" id="version-type-icon" />
+            <select id="version_type" name="version_type" aria-required="true" aria-describedby="versionTypeHelp">
+                <option value="Vanilla" {% if user_settings.get('version_type') == 'Vanilla' %}selected{% endif %}>Vanilla</option>
+                <option value="Forge" {% if user_settings.get('version_type') == 'Forge' %}selected{% endif %}>Forge</option>
+                <option value="Fabric" {% if user_settings.get('version_type') == 'Fabric' %}selected{% endif %}>Fabric</option>
+            </select>
+        </div>
+
+        <label for="version-list" id="version-label">
+            Версия
+            <span id="version-toggle-icon" aria-hidden="true">&#9660;</span>
+        </label>
+        <div id="version-list" role="listbox" aria-label="Список версий" tabindex="0" aria-activedescendant="">
+            <!-- Версии будут добавлены динамически -->
+        </div>
+
+        <div id="actions">
+            <button type="button" id="download-btn" aria-label="Скачать выбранную версию">Скачать</button>
+            <button type="button" id="launch-btn" aria-label="Запустить игру с выбранной версией">Запустить</button>
+        </div>
+
+    </form>
+</div>
+
+<div id="toast" role="alert" aria-live="assertive"></div>
+
+<script>
+(() => {
+    const toast = document.getElementById('toast');
+    const bgStatic = document.getElementById('bg_static');
+    const bgAnimate = document.getElementById('bg_animate');
+    const bgButtons = document.querySelectorAll('#background-switcher button');
+    const versionTypeSelect = document.getElementById('version_type');
+    const versionTypeIcon = document.getElementById('version-type-icon');
+    const versionList = document.getElementById('version-list');
+    const usernameInput = document.getElementById('username');
+    const memorySelect = document.getElementById('memory');
+    const downloadBtn = document.getElementById('download-btn');
+    const launchBtn = document.getElementById('launch-btn');
+    const versionLabel = document.getElementById('version-label');
+    const versionToggleIcon = document.getElementById('version-toggle-icon');
+
+    let versionsData = [];
+    let selectedVersionIndex = -1;
+    let isInstalledList = false;
+    let versionListExpanded = true;
+
+    const ICONS = {
+        "Vanilla": "{{ url_for('static', filename='vanilla_icon.png') }}",
+        "Forge": "{{ url_for('static', filename='forge_icon.png') }}",
+        "Fabric": "{{ url_for('static', filename='fabric_icon.png') }}"
+    };
+
+    function showToast(message, type = "success") {
+        toast.textContent = message;
+        toast.className = `show ${type}`;
+        clearTimeout(toast._timeout);
+        toast._timeout = setTimeout(() => {
+            toast.className = '';
+        }, 3500);
+    }
+
+    function switchBackground(mode) {
+        bgButtons.forEach(btn => {
+            const active = btn.dataset.bg === mode;
+            btn.classList.toggle('active', active);
+            btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+        });
+
+        if (mode === 'static') {
+            bgStatic.style.display = 'block';
+            bgAnimate.style.display = 'none';
+            document.body.style.backgroundColor = 'transparent';
+        } else if (mode === 'animate') {
+            bgStatic.style.display = 'none';
+            bgAnimate.style.display = 'block';
+            document.body.style.backgroundColor = 'transparent';
+        } else if (mode === 'gray') {
+            bgStatic.style.display = 'none';
+            bgAnimate.style.display = 'none';
+            document.body.style.backgroundColor = 'rgb(30,30,30)';
+        }
+    }
+
+    async function loadVersions() {
+        const versionType = versionTypeSelect.value;
+
+        versionTypeIcon.src = ICONS[versionType] || ICONS["Vanilla"];
+        versionTypeIcon.alt = versionType + " icon";
+
+        try {
+            const resp = await fetch('/get_versions', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({version_type: versionType, installed: isInstalledList})
+            });
+            if (!resp.ok) throw new Error(`Ошибка сети: ${resp.status}`);
+
+            versionsData = await resp.json();
+            selectedVersionIndex = -1;
+            renderVersionList();
+
+            const savedVersion = "{{ user_settings.get('version', '') }}";
+            if (savedVersion) {
+                const idx = versionsData.findIndex(v => v.display === savedVersion);
+                if (idx !== -1) {
+                    selectVersion(idx);
+                    scrollToVersion(idx);
+                }
+            }
+        } catch (e) {
+            showToast(`Ошибка загрузки версий: ${e.message}`, "error");
+        }
+    }
+
+    function renderVersionList() {
+        versionList.innerHTML = '';
+        if (versionsData.length === 0) {
+            const emptyMsg = document.createElement('div');
+            emptyMsg.textContent = isInstalledList ? "Установленные версии не найдены" : "Доступные версии не найдены";
+            emptyMsg.style.padding = "15px 20px";
+            emptyMsg.style.color = "#bbb";
+            versionList.appendChild(emptyMsg);
+            return;
+        }
+        versionsData.forEach((v, i) => {
+            const div = document.createElement('div');
+            div.className = 'version-item';
+            div.setAttribute('role', 'option');
+            div.setAttribute('aria-selected', 'false');
+            div.tabIndex = 0;
+            div.dataset.index = i;
+
+            const img = document.createElement('img');
+            img.className = 'icon-img';
+            img.src = ICONS[v.type] || ICONS["Vanilla"];
+            img.alt = v.type + " icon";
+            img.draggable = false;
+
+            const text = document.createElement('span');
+            let displayText = v.display.replace(/ Fabric| Forge/g, '');
+            text.textContent = `${displayText} (${v.type})`;
+
+            div.appendChild(img);
+            div.appendChild(text);
+
+            div.addEventListener('click', () => {
+                selectVersion(i);
+            });
+            div.addEventListener('keydown', e => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    selectVersion(i);
+                }
+            });
+
+            versionList.appendChild(div);
+        });
+    }
+
+    function selectVersion(index) {
+        if (selectedVersionIndex === index) return;
+        const prevSelected = versionList.querySelector('.version-item.selected');
+        if (prevSelected) {
+            prevSelected.classList.remove('selected');
+            prevSelected.setAttribute('aria-selected', 'false');
+        }
+        const newSelected = versionList.querySelector(`.version-item[data-index="${index}"]`);
+        if (newSelected) {
+            newSelected.classList.add('selected');
+            newSelected.setAttribute('aria-selected', 'true');
+            selectedVersionIndex = index;
+            saveSettings();
+        }
+    }
+
+    function scrollToVersion(index) {
+        const el = versionList.querySelector(`.version-item[data-index="${index}"]`);
+        if (el) {
+            el.scrollIntoView({block: "nearest"});
+        }
+    }
+
+    function toggleVersionList() {
+        versionListExpanded = !versionListExpanded;
+        if (versionListExpanded) {
+            versionList.classList.remove('collapsed');
+            versionToggleIcon.classList.add('expanded');
+            versionLabel.setAttribute('aria-expanded', 'true');
+        } else {
+            versionList.classList.add('collapsed');
+            versionToggleIcon.classList.remove('expanded');
+            versionLabel.setAttribute('aria-expanded', 'false');
+        }
+    }
+
+    versionLabel.setAttribute('aria-expanded', 'true');
+    versionToggleIcon.classList.add('expanded');
+
+    versionLabel.addEventListener('click', () => {
+        toggleVersionList();
+    });
+
+    function getSelectedVersion() {
+        if (selectedVersionIndex === -1) return null;
+        return versionsData[selectedVersionIndex];
+    }
+
+    async function downloadVersion() {
+        const v = getSelectedVersion();
+        if (!v) return showToast("Выберите версию для скачивания", "error");
+        showToast("Скачивание версии...", "success");
+        try {
+            const resp = await fetch('/download', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({version: v.display, vtype: v.type})
+            });
+            const data = await resp.json();
+            showToast(data.message, data.status);
+        } catch (e) {
+            showToast(`Ошибка скачивания: ${e.message}`, "error");
+        }
+    }
+
+    async function launchVersion() {
+        const v = getSelectedVersion();
+        const username = usernameInput.value.trim();
+        if (!username) return showToast("Введите никнейм", "error");
+        if (!v) return showToast("Выберите версию для запуска", "error");
+        showToast("Запуск Minecraft...", "success");
+        try {
+            const resp = await fetch('/launch', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({version: v.display, vtype: v.type, username: username})
+            });
+            const data = await resp.json();
+            showToast(data.message, data.status);
+        } catch (e) {
+            showToast(`Ошибка запуска: ${e.message}`, "error");
+        }
+    }
+
+    async function saveSettings() {
+        const username = usernameInput.value.trim();
+        const versionType = versionTypeSelect.value;
+        const version = getSelectedVersion()?.display || '';
+        const memory = memorySelect.value;
+
+        try {
+            await fetch('/save_settings', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    username,
+                    version_type: versionType,
+                    version,
+                    memory
+                })
+            });
+        } catch (e) {
+            console.warn('Ошибка сохранения настроек:', e);
+        }
+    }
+
+    window.addEventListener('keydown', e => {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+        if (e.key.toLowerCase() === 'd') {
+            isInstalledList = false;
+            selectedVersionIndex = -1;
+            loadVersions();
+            showToast("Показаны доступные версии");
+        } else if (e.key.toLowerCase() === 'i') {
+            isInstalledList = true;
+            selectedVersionIndex = -1;
+            loadVersions();
+            showToast("Показаны установленные версии");
+        }
+    });
+
+    bgButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            switchBackground(btn.dataset.bg);
+        });
+    });
+
+    versionTypeSelect.addEventListener('change', () => {
+        selectedVersionIndex = -1;
+        loadVersions();
+        saveSettings();
+    });
+    usernameInput.addEventListener('change', saveSettings);
+    memorySelect.addEventListener('change', saveSettings);
+
+    downloadBtn.addEventListener('click', downloadVersion);
+    launchBtn.addEventListener('click', launchVersion);
+
+    function init() {
+        switchBackground('static');
+        loadVersions();
+    }
+
+    init();
+})();
+</script>
+
+</body>
+</html>
