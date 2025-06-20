@@ -1,5 +1,5 @@
-import sys
 import os
+import sys
 import json
 from flask import Flask, render_template, request, jsonify
 import minecraft_launcher_lib
@@ -9,10 +9,9 @@ import time
 
 app = Flask(__name__)
 
-# Путь к папке проекта — измените на ваш
+# Определяем базовую директорию относительно расположения скрипта
 BASE_DIR = os.path.dirname(os.path.abspath(sys.argv[0]))
 os.chdir(BASE_DIR)
-print(f"Текущая рабочая директория: {os.getcwd()}")
 
 minecraft_directory = minecraft_launcher_lib.utils.get_minecraft_directory()
 SETTINGS_FILE = os.path.join(BASE_DIR, 'user_settings.json')
@@ -60,18 +59,10 @@ def get_versions_by_type(version_type):
                 display_name = f"{v['id']} Forge"
                 versions.append({"display": display_name, "id": forge_ver, "type": "Forge"})
     elif version_type == "Fabric":
+        fabric_loader_version = "0.16.14"  # Укажите актуальную версию fabric-loader
         for v in releases:
             if minecraft_launcher_lib.fabric.is_minecraft_version_supported(v["id"]):
-                # Получаем список fabric loader версий, установленных локально
-                fabric_versions = minecraft_launcher_lib.fabric.get_installed_fabric_versions(minecraft_directory)
-                fabric_id = None
-                for fab in fabric_versions:
-                    if fab["minecraft"] == v["id"]:
-                        fabric_id = fab["id"]
-                        break
-                if not fabric_id:
-                    # Если fabric не установлен, используем просто display с пометкой Fabric
-                    fabric_id = f"{v['id']} Fabric"
+                fabric_id = f"fabric-loader-{fabric_loader_version}-{v['id']}"
                 display_name = f"{v['id']} Fabric"
                 versions.append({"display": display_name, "id": fabric_id, "type": "Fabric"})
     return versions
@@ -176,21 +167,17 @@ def launch():
         installed_versions = minecraft_launcher_lib.utils.get_installed_versions(minecraft_directory)
         found_version = None
 
-        # Ищем точный id установленной версии, учитывая тип
         for v in installed_versions:
             vid = v.get("id", "")
             if vid == version_display or v.get("display", "") == version_display:
                 found_version = v
                 break
-            # Для Forge ищем по вхождению "forge" и совпадению по основной версии
             if vtype == "Forge" and "forge" in vid.lower() and version_display.split()[0] in vid:
                 found_version = v
                 break
-            # Для Fabric ищем по "fabric" и основной версии
             if vtype == "Fabric" and "fabric" in vid.lower() and version_display.split()[0] in vid:
                 found_version = v
                 break
-            # Для Vanilla — точное совпадение по версии
             if vtype == "Vanilla" and vid == version_display.split()[0]:
                 found_version = v
                 break
@@ -264,14 +251,12 @@ def background_launcher():
             memory = settings.get("memory")
             vtype = settings.get("version_type")
 
-            # Проверяем, жив ли процесс Minecraft
             if minecraft_process is not None:
-                if minecraft_process.poll() is not None:  # процесс завершился
+                if minecraft_process.poll() is not None:
                     minecraft_process = None
                     set_running_status(None)
                     last_running_status = None
 
-            # Запускаем игру, если статус "app" и процесс не запущен
             if running == "app" and last_running_status != "app" and minecraft_process is None:
                 print("Обнаружено задание на запуск из app! Запускаем игру...")
                 installed_versions = minecraft_launcher_lib.utils.get_installed_versions(minecraft_directory)
