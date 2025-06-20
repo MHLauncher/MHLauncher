@@ -1,3 +1,4 @@
+import sys
 import os
 import json
 from flask import Flask, render_template, request, jsonify
@@ -9,7 +10,7 @@ import time
 app = Flask(__name__)
 
 # Путь к папке проекта — измените на ваш
-BASE_DIR = r"C:\Users\DecuShunoKapushino\Desktop\Супер Носки Дракона"
+BASE_DIR = os.path.dirname(os.path.abspath(sys.argv[0]))
 os.chdir(BASE_DIR)
 print(f"Текущая рабочая директория: {os.getcwd()}")
 
@@ -61,8 +62,18 @@ def get_versions_by_type(version_type):
     elif version_type == "Fabric":
         for v in releases:
             if minecraft_launcher_lib.fabric.is_minecraft_version_supported(v["id"]):
+                # Получаем список fabric loader версий, установленных локально
+                fabric_versions = minecraft_launcher_lib.fabric.get_installed_fabric_versions(minecraft_directory)
+                fabric_id = None
+                for fab in fabric_versions:
+                    if fab["minecraft"] == v["id"]:
+                        fabric_id = fab["id"]
+                        break
+                if not fabric_id:
+                    # Если fabric не установлен, используем просто display с пометкой Fabric
+                    fabric_id = f"{v['id']} Fabric"
                 display_name = f"{v['id']} Fabric"
-                versions.append({"display": display_name, "id": v["id"], "type": "Fabric"})
+                versions.append({"display": display_name, "id": fabric_id, "type": "Fabric"})
     return versions
 
 def get_installed_versions():
@@ -157,19 +168,39 @@ def launch():
     if running_status is not None:
         return jsonify({"status": "error", "message": f"Игра уже запущена ({running_status}). Повторный запуск невозможен."})
 
-    version = request.json.get('version')
+    version_display = request.json.get('version')  # Например: '1.20.1 Forge' или 'fabric-loader-0.16.14-1.18.2'
     username = request.json.get('username')
     vtype = request.json.get('vtype')
 
     try:
-        installed_versions = [v["id"] for v in minecraft_launcher_lib.utils.get_installed_versions(minecraft_directory)]
-        real_id = version.split()[0]
-        if real_id not in installed_versions:
-            return jsonify({"status": "error", "message": f"Версия {real_id} не установлена. Сначала скачайте её."})
+        installed_versions = minecraft_launcher_lib.utils.get_installed_versions(minecraft_directory)
+        found_version = None
 
-        # Помечаем, что игра запущена из web
+        # Ищем точный id установленной версии, учитывая тип
+        for v in installed_versions:
+            vid = v.get("id", "")
+            if vid == version_display or v.get("display", "") == version_display:
+                found_version = v
+                break
+            # Для Forge ищем по вхождению "forge" и совпадению по основной версии
+            if vtype == "Forge" and "forge" in vid.lower() and version_display.split()[0] in vid:
+                found_version = v
+                break
+            # Для Fabric ищем по "fabric" и основной версии
+            if vtype == "Fabric" and "fabric" in vid.lower() and version_display.split()[0] in vid:
+                found_version = v
+                break
+            # Для Vanilla — точное совпадение по версии
+            if vtype == "Vanilla" and vid == version_display.split()[0]:
+                found_version = v
+                break
+
+        if not found_version:
+            return jsonify({"status": "error", "message": f"Версия для запуска не найдена. Сначала скачайте её."})
+
+        real_id = found_version["id"]
+
         set_running_status("web")
-
         options = {
             "username": username,
             "launcherName": "WebLauncher",
@@ -180,7 +211,7 @@ def launch():
 
         threading.Thread(target=reset_status, daemon=True).start()
 
-        return jsonify({"status": "success", "message": f"Запуск версии {version} с ником {username}..."})
+        return jsonify({"status": "success", "message": f"Запуск версии {real_id} с ником {username}..."})
     except Exception as e:
         set_running_status(None)
         return jsonify({"status": "error", "message": f"Ошибка при запуске: {e}"})
@@ -216,10 +247,8 @@ def set_running_status_api():
     set_running_status(status)
     return jsonify({"status": "success", "message": f"Статус running установлен в {status}"})
 
-
 def reset_status():
     set_running_status(None)
-
 
 last_running_status = None
 minecraft_process = None  # Глобальная переменная для процесса Minecraft
@@ -245,11 +274,26 @@ def background_launcher():
             # Запускаем игру, если статус "app" и процесс не запущен
             if running == "app" and last_running_status != "app" and minecraft_process is None:
                 print("Обнаружено задание на запуск из app! Запускаем игру...")
-                installed_versions = [v["id"] for v in minecraft_launcher_lib.utils.get_installed_versions(minecraft_directory)]
-                real_id = version.split()[0] if version else None
-                if real_id not in installed_versions:
-                    print(f"Версия {real_id} не установлена. Сначала скачайте её.")
+                installed_versions = minecraft_launcher_lib.utils.get_installed_versions(minecraft_directory)
+                found_version = None
+                for v in installed_versions:
+                    vid = v.get("id", "")
+                    if vid == version or v.get("display", "") == version:
+                        found_version = v
+                        break
+                    if vtype == "Forge" and "forge" in vid.lower() and version.split()[0] in vid:
+                        found_version = v
+                        break
+                    if vtype == "Fabric" and "fabric" in vid.lower() and version.split()[0] in vid:
+                        found_version = v
+                        break
+                    if vtype == "Vanilla" and vid == version.split()[0]:
+                        found_version = v
+                        break
+                if not found_version:
+                    print(f"Версия {version} не установлена. Сначала скачайте её.")
                 else:
+                    real_id = found_version["id"]
                     options = {
                         "username": username or "Player",
                         "launcherName": "AppLauncher",
@@ -265,7 +309,6 @@ def background_launcher():
                     minecraft_process = subprocess.Popen(command)
                     print(f"Игра {real_id} запущена с ником {username} и памятью {memory} МБ.")
                     last_running_status = "app"
-
             else:
                 last_running_status = running
 
@@ -277,4 +320,4 @@ def background_launcher():
 threading.Thread(target=background_launcher, daemon=True).start()
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5002, debug=True)
+    app.run(port=5002, debug=True)
